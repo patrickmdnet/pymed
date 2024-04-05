@@ -20,7 +20,7 @@ class PubMed(object):
     """
 
     def __init__(
-        self: object, tool: str = "my_tool", email: str = "my_email@example.com"
+        self: object, tool: str = "my_tool", email: str = "my_email@example.com", api_key: str = "APIKEYGOESHERE"
     ) -> None:
         """ Initialization of the object.
 
@@ -30,6 +30,7 @@ class PubMed(object):
                             PMC (PubMed Central).
                 - email     String, email of the user of the tool. This parameter
                             is not required but kindly requested by PMC (PubMed Central).
+                - api_key   see https://ncbiinsights.ncbi.nlm.nih.gov/2017/11/02/new-api-keys-for-the-e-utilities/
 
             Returns:
                 - None
@@ -38,13 +39,14 @@ class PubMed(object):
         # Store the input parameters
         self.tool = tool
         self.email = email
+        self.api_key = api_key
 
         # Keep track of the rate limit
-        self._rateLimit = 3
+        self._rateLimit = 10
         self._requestsMade = []
 
         # Define the standard / default query parameters
-        self.parameters = {"tool": tool, "email": email, "db": "pubmed"}
+        self.parameters = {"tool": tool, "email": email, "db": "pubmed", "api_key": api_key}
 
     def query(self: object, query: str, max_results: int = 100):
         """ Method that executes a query agains the GraphQL schema, automatically
@@ -71,6 +73,13 @@ class PubMed(object):
 
         # Chain the batches back together and return the list
         return itertools.chain.from_iterable(articles)
+
+    def queryIds(self: object, query: str, max_results: int = 100):
+
+        # Retrieve the article IDs for the query
+        article_ids = self._getArticleIds(query=query, max_results=max_results)
+
+        return article_ids
 
     def getTotalResultsCount(self: object, query: str) -> int:
         """ Helper method that returns the total number of results that match the query.
@@ -145,9 +154,15 @@ class PubMed(object):
         # Add this request to the list of requests made
         self._requestsMade.append(datetime.datetime.now())
 
+
         # Return the response
         if output == "json":
-            return response.json()
+            try:
+                return response.json()
+            except Exception as e:
+                print(f"Unexpected {e=}, {type(e)=}")
+                print('text = ',response.text)
+                raise
         else:
             return response.text
 
@@ -198,10 +213,10 @@ class PubMed(object):
 
         # Add specific query parameters
         parameters["term"] = query
-        parameters["retmax"] = 50000
+        parameters["retmax"] = 9998
 
         # Calculate a cut off point based on the max_results parameter
-        if max_results < parameters["retmax"]:
+        if max_results > 0 and max_results < parameters["retmax"]:
             parameters["retmax"] = max_results
 
         # Make the first request to PubMed
